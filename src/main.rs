@@ -1,4 +1,4 @@
-use std::{collections::HashSet, env};
+use std::collections::HashSet;
 
 use serenity::{
     async_trait,
@@ -7,11 +7,28 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
     prelude::*,
 };
+use songbird::SerenityInit;
+
+use crate::commands::GENERAL_GROUP;
+
+mod commands;
 
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
+    async fn message(&self, ctx: Context, msg: Message) {
+        if msg.content == "!ping" {
+            // Sending a message can fail, due to a network error, an
+            // authentication error, or lack of permissions to post in the
+            // channel, so log to stdout when some error happens, with a
+            // description of it.
+            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+                println!("Error sending message: {:?}", why);
+            }
+        }
+    }
+
     // Set a handler to be called on the `ready` event. This is called when a
     // shard is booted, and a READY payload is sent by Discord. This payload
     // contains data like the current user's guild Ids, current user data,
@@ -48,22 +65,20 @@ async fn main() {
         Err(err) => panic!("Could not access application info: {:?}", err),
     };
 
-    let framework = StandardFramework::new().configure(|c| {
-        c.with_whitespace(true)
-            .on_mention(Some(bot_id))
-            .prefix("~")
-            // In this case, if "," would be first, a message would never
-            // be delimited at ", ", forcing you to trim your arguments if you
-            // want to avoid whitespaces at the start of each.
-            .delimiters(vec![", ", ","])
-            // Sets the bot's owners. These will be used for commands that
-            // are owners only.
-            .owners(owners)
-    });
+    let framework = StandardFramework::new()
+        .configure(|c| {
+            c.with_whitespace(true)
+                .on_mention(Some(bot_id))
+                .prefix("/pascal ")
+                .delimiters(vec![", ", ","])
+                .owners(owners)
+        })
+        .group(&GENERAL_GROUP);
 
     let mut client = Client::builder(&token)
         .framework(framework)
         .event_handler(Handler)
+        .register_songbird()
         .await
         .expect("Err creating client");
 
