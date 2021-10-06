@@ -1,4 +1,9 @@
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto,
+    error::Error,
+    sync::Arc,
+};
 
 use serenity::{
     async_trait,
@@ -7,7 +12,15 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
     prelude::*,
 };
-use songbird::SerenityInit;
+use songbird::{
+    input::{
+        self,
+        cached::{Compressed, Memory},
+        Input,
+    },
+    SerenityInit,
+};
+use std::fs;
 
 use crate::commands::GENERAL_GROUP;
 
@@ -37,6 +50,30 @@ impl EventHandler for Handler {
     // In this case, just print what the current user's username is.
     async fn ready(&self, _: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+    }
+}
+
+struct SoundStore;
+
+impl TypeMapKey for SoundStore {
+    type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
+}
+
+enum CachedSound {
+    Compressed(Compressed),
+    Uncompressed(Memory),
+}
+
+impl From<&CachedSound> for Input {
+    fn from(obj: &CachedSound) -> Self {
+        use CachedSound::*;
+        match obj {
+            Compressed(c) => c.new_handle().into(),
+            Uncompressed(u) => u
+                .new_handle()
+                .try_into()
+                .expect("Failed to create decoder for Memory source."),
+        }
     }
 }
 
@@ -75,6 +112,11 @@ async fn main() {
         })
         .group(&GENERAL_GROUP);
 
+    let sounds = load_sounds()
+        .await
+        .map_err(|err| format!("Error loading sounds: {}", err))
+        .unwrap();
+
     let mut client = Client::builder(&token)
         .framework(framework)
         .event_handler(Handler)
@@ -82,7 +124,35 @@ async fn main() {
         .await
         .expect("Err creating client");
 
+    {
+        let mut client_data = client.data.write().await;
+        client_data.insert::<SoundStore>(Arc::new(Mutex::new(sounds)));
+    }
+
     if let Err(err) = client.start().await {
         println!("Client error: {:?}", err);
     }
+}
+
+async fn load_sounds() -> Result<HashMap<String, CachedSound>, Box<dyn Error>> {
+    // Loading the audio ahead of time.
+    let mut audio_map: HashMap<String, CachedSound> = HashMap::new();
+
+    let files = fs::read_dir("./audio")?;
+    for file in files {
+        let filename = file?.file_name();
+        if let Some(raw_name) = filename.to_str() {
+            println!("{}", raw_name);
+            if raw_name.ends_with(".wav") {
+                let src = Memory::new(input::ffmpeg("ting.wav").await?)
+                    .map_err(|err| format!("Error creating memory sound object: {}", err))?;
+
+                src.raw.spawn_loader();
+
+                audio_map.insert(raw_name.replace(".wav", ""), CachedSound::Uncompressed(src));
+            }
+        }
+    }
+
+    Ok(audio_map)
 }
