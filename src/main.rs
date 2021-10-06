@@ -7,6 +7,7 @@ use std::{
 
 use serenity::{
     async_trait,
+    client::bridge::gateway::GatewayIntents,
     framework::StandardFramework,
     http::Http,
     model::{channel::Message, gateway::Ready},
@@ -84,6 +85,7 @@ async fn main() {
     let token = dotenv::var("DISCORD_TOKEN").expect("Expected entry DISCORD_TOKEN in .env");
 
     let http = Http::new_with_token(&token);
+    // http.get_guild(guild_id)
 
     // Fetch bot's owners and id
     let (owners, bot_id) = match http.get_current_application_info().await {
@@ -106,7 +108,7 @@ async fn main() {
         .configure(|c| {
             c.with_whitespace(true)
                 .on_mention(Some(bot_id))
-                .prefix("/pascal ")
+                .prefix("!")
                 .delimiters(vec![", ", ","])
                 .owners(owners)
         })
@@ -120,6 +122,11 @@ async fn main() {
     let mut client = Client::builder(&token)
         .framework(framework)
         .event_handler(Handler)
+        .intents(
+            GatewayIntents::GUILD_VOICE_STATES
+                | GatewayIntents::GUILDS
+                | GatewayIntents::GUILD_MESSAGES,
+        )
         .register_songbird()
         .await
         .expect("Err creating client");
@@ -140,11 +147,12 @@ async fn load_sounds() -> Result<HashMap<String, CachedSound>, Box<dyn Error>> {
 
     let files = fs::read_dir("./audio")?;
     for file in files {
-        let filename = file?.file_name();
+        let dir_entry = file?;
+        let path = dir_entry.path();
+        let filename = dir_entry.file_name();
         if let Some(raw_name) = filename.to_str() {
-            println!("{}", raw_name);
             if raw_name.ends_with(".wav") {
-                let src = Memory::new(input::ffmpeg("ting.wav").await?)
+                let src = Memory::new(input::ffmpeg(path).await?)
                     .map_err(|err| format!("Error creating memory sound object: {}", err))?;
 
                 src.raw.spawn_loader();

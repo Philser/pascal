@@ -10,8 +10,10 @@ use crate::SoundStore;
 #[command]
 #[only_in(guilds)]
 pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let guild_id = msg
+        .guild_id
+        .ok_or("Message not received via gateway, but is required to be")?;
     let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
     join_channel(ctx, msg, &guild).await.unwrap();
 
@@ -34,12 +36,13 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
             .get::<SoundStore>()
             .cloned()
             .expect("Sound cache was installed at startup.");
+
         let sources = sources_lock.lock().await;
-        let source = sources
-            .get("ting")
-            .expect("Handle placed into cache at startup.");
+
+        let source = sources.get("loop").expect("Sound file missing");
 
         let _sound = handler.play_source(source.into());
+        _sound.set_volume(1.0)?;
 
         check_msg(msg.channel_id.say(&ctx.http, "Ting!").await);
     } else {
