@@ -6,7 +6,9 @@ use serenity::Result as SerenityResult;
 
 use crate::SoundStore;
 
-/// Command responsible for playing sounds
+/// Plays available sounds.
+/// Use the !list command to get a list of available sounds.
+/// Usage: `!play [sound name]`
 #[command]
 #[only_in(guilds)]
 pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
@@ -39,12 +41,11 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
         let sources = sources_lock.lock().await;
 
-        let source = sources.get("loop").expect("Sound file missing");
+        let source = sources.get(&sound_name).expect("Sound file missing");
 
         let _sound = handler.play_source(source.into());
-        _sound.set_volume(1.0)?;
 
-        check_msg(msg.channel_id.say(&ctx.http, "Ting!").await);
+        check_msg(msg.channel_id.say(&ctx.http, &sound_name).await);
     } else {
         check_msg(
             msg.channel_id

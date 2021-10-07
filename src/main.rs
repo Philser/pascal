@@ -23,6 +23,7 @@ use songbird::{
 };
 use std::fs;
 
+use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
 
 mod commands;
@@ -112,6 +113,7 @@ async fn main() {
                 .delimiters(vec![", ", ","])
                 .owners(owners)
         })
+        .help(&HELP)
         .group(&GENERAL_GROUP);
 
     let sounds = load_sounds()
@@ -145,19 +147,27 @@ async fn load_sounds() -> Result<HashMap<String, CachedSound>, Box<dyn Error>> {
     // Loading the audio ahead of time.
     let mut audio_map: HashMap<String, CachedSound> = HashMap::new();
 
+    let allowed_types = vec!["m4a", "wav"];
+
     let files = fs::read_dir("./audio")?;
     for file in files {
         let dir_entry = file?;
         let path = dir_entry.path();
         let filename = dir_entry.file_name();
         if let Some(raw_name) = filename.to_str() {
-            if raw_name.ends_with(".wav") {
-                let src = Memory::new(input::ffmpeg(path).await?)
-                    .map_err(|err| format!("Error creating memory sound object: {}", err))?;
+            if let Some(extension) = path.extension() {
+                if let Some(ext) = extension.to_str() {
+                    if allowed_types.contains(&ext) {
+                        let src =
+                            Memory::new(input::ffmpeg(path.clone()).await?).map_err(|err| {
+                                format!("Error creating memory sound object: {}", err)
+                            })?;
 
-                src.raw.spawn_loader();
+                        src.raw.spawn_loader();
 
-                audio_map.insert(raw_name.replace(".wav", ""), CachedSound::Uncompressed(src));
+                        audio_map.insert(raw_name.replace(ext, ""), CachedSound::Uncompressed(src));
+                    }
+                }
             }
         }
     }
