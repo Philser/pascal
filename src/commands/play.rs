@@ -4,7 +4,7 @@ use serenity::model::channel::Message;
 use serenity::model::guild::Guild;
 use serenity::Result as SerenityResult;
 
-use crate::SoundStore;
+use crate::{CachedSound, SoundStore};
 
 /// Plays available sounds.
 /// Use the !list command to get a list of available sounds.
@@ -41,11 +41,25 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
         let sources = sources_lock.lock().await;
 
-        let source = sources.get(&sound_name).expect("Sound file missing");
+        let source: &CachedSound;
+        if let Some(src) = sources.get(&sound_name) {
+            source = src
+        } else {
+            check_msg(
+                msg.channel_id
+                    .say(
+                        &ctx.http,
+                        format!(
+                            "I don't know this sound: **{}**\nType `!list` to see a list of sounds",
+                            sound_name
+                        ),
+                    )
+                    .await,
+            );
+            return Ok(());
+        }
 
-        let _sound = handler.play_source(source.into());
-
-        check_msg(msg.channel_id.say(&ctx.http, &sound_name).await);
+        handler.play_source(source.into());
     } else {
         check_msg(
             msg.channel_id

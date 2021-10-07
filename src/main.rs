@@ -147,7 +147,7 @@ async fn load_sounds() -> Result<HashMap<String, CachedSound>, Box<dyn Error>> {
     // Loading the audio ahead of time.
     let mut audio_map: HashMap<String, CachedSound> = HashMap::new();
 
-    let allowed_types = vec!["m4a", "wav"];
+    let allowed_types = vec!["m4a", "wav", "mp3"];
 
     let files = fs::read_dir("./audio")?;
     for file in files {
