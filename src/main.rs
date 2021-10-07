@@ -165,7 +165,10 @@ async fn load_sounds() -> Result<HashMap<String, CachedSound>, Box<dyn Error>> {
 
                         src.raw.spawn_loader();
 
-                        audio_map.insert(raw_name.replace(ext, ""), CachedSound::Uncompressed(src));
+                        audio_map.insert(
+                            raw_name.replace(&format!(".{}", ext), ""),
+                            CachedSound::Uncompressed(src),
+                        );
                     }
                 }
             }
