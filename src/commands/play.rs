@@ -13,6 +13,7 @@ use crate::{CachedSound, SoundStore};
 /// Usage: `!play [sound name]`
 #[command]
 #[only_in(guilds)]
+#[aliases(p)]
 pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild_id = msg
         .guild_id
@@ -67,6 +68,7 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         }
 
         handler.enqueue_source(source.into());
+        // handler.play_source(source.into());
     } else {
         check_msg(
             msg.channel_id
