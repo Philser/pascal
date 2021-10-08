@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serenity::client::Context;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::channel::Message;
@@ -31,6 +33,11 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
+        // For now, we don't want to queue sounds, because that might get messy quickly.
+        if handler.queue().len() > 0 {
+            return Ok(());
+        }
+        
         let sources_lock = ctx
             .data
             .read()
@@ -59,7 +66,7 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
             return Ok(());
         }
 
-        handler.play_source(source.into());
+        handler.enqueue_source(source.into());
     } else {
         check_msg(
             msg.channel_id

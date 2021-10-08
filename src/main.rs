@@ -61,6 +61,16 @@ impl TypeMapKey for SoundStore {
     type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
 }
 
+struct GlobalPlayLock;
+enum Lock {
+    Locked,
+    Unlocked
+}
+
+impl TypeMapKey for GlobalPlayLock {
+    type Value = Arc<Mutex<Lock>>;
+}
+
 enum CachedSound {
     Compressed(Compressed),
     Uncompressed(Memory),
@@ -136,6 +146,7 @@ async fn main() {
     {
         let mut client_data = client.data.write().await;
         client_data.insert::<SoundStore>(Arc::new(Mutex::new(sounds)));
+        client_data.insert::<GlobalPlayLock>(Arc::new(Mutex::new(Lock::Unlocked)));
     }
 
     if let Err(err) = client.start().await {
