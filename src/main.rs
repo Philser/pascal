@@ -27,6 +27,7 @@ use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
 
 mod commands;
+mod utils;
 
 struct Handler;
 
@@ -61,16 +62,6 @@ impl TypeMapKey for SoundStore {
     type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
 }
 
-struct GlobalPlayLock;
-enum Lock {
-    Locked,
-    Unlocked
-}
-
-impl TypeMapKey for GlobalPlayLock {
-    type Value = Arc<Mutex<Lock>>;
-}
-
 enum CachedSound {
     Compressed(Compressed),
     Uncompressed(Memory),
@@ -96,7 +87,6 @@ async fn main() {
     let token = dotenv::var("DISCORD_TOKEN").expect("Expected entry DISCORD_TOKEN in .env");
 
     let http = Http::new_with_token(&token);
-    // http.get_guild(guild_id)
 
     // Fetch bot's owners and id
     let (owners, bot_id) = match http.get_current_application_info().await {
@@ -126,11 +116,6 @@ async fn main() {
         .help(&HELP)
         .group(&GENERAL_GROUP);
 
-    let sounds = load_sounds()
-        .await
-        .map_err(|err| format!("Error loading sounds: {}", err))
-        .unwrap();
-
     let mut client = Client::builder(&token)
         .framework(framework)
         .event_handler(Handler)
@@ -143,48 +128,7 @@ async fn main() {
         .await
         .expect("Err creating client");
 
-    {
-        let mut client_data = client.data.write().await;
-        client_data.insert::<SoundStore>(Arc::new(Mutex::new(sounds)));
-        client_data.insert::<GlobalPlayLock>(Arc::new(Mutex::new(Lock::Unlocked)));
-    }
-
     if let Err(err) = client.start().await {
         println!("Client error: {:?}", err);
     }
-}
-
-async fn load_sounds() -> Result<HashMap<String, CachedSound>, Box<dyn Error>> {
-    // Loading the audio ahead of time.
-    let mut audio_map: HashMap<String, CachedSound> = HashMap::new();
-
-    let allowed_types = vec!["m4a", "wav", "mp3"];
-
-    let files = fs::read_dir("./audio")?;
-    for file in files {
-        let dir_entry = file?;
-        let path = dir_entry.path();
-        let filename = dir_entry.file_name();
-        if let Some(raw_name) = filename.to_str() {
-            if let Some(extension) = path.extension() {
-                if let Some(ext) = extension.to_str() {
-                    if allowed_types.contains(&ext) {
-                        let src =
-                            Memory::new(input::ffmpeg(path.clone()).await?).map_err(|err| {
-                                format!("Error creating memory sound object: {}", err)
-                            })?;
-
-                        src.raw.spawn_loader();
-
-                        audio_map.insert(
-                            raw_name.replace(&format!(".{}", ext), ""),
-                            CachedSound::Uncompressed(src),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(audio_map)
 }

@@ -1,16 +1,12 @@
-use std::sync::Arc;
-
 use serenity::client::Context;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::channel::Message;
 use serenity::model::guild::Guild;
 use serenity::Result as SerenityResult;
+use songbird::input;
 
-use crate::{CachedSound, SoundStore};
+use crate::utils::sound_files::get_sound_files;
 
-/// Plays available sounds.
-/// Use the !list command to get a list of available sounds.
-/// Usage: `!play [sound name]`
 #[command]
 #[only_in(guilds)]
 #[aliases(p)]
@@ -20,61 +16,48 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         .ok_or("Message not received via gateway, but is required to be")?;
     let guild = msg.guild(&ctx.cache).await.unwrap();
 
-    join_channel(ctx, msg, &guild).await.unwrap();
-
     let sound_name = parse_sound_name(&ctx, &msg, &mut args)
         .await
         .ok_or("Did not provide sound name")?;
 
-    let manager = songbird::get(ctx)
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let sound_files = get_sound_files().map_err(|err| format!("{}", err))?;
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
+    let file = sound_files.get(&sound_name);
 
-        // For now, we don't want to queue sounds, because that might get messy quickly.
-        if handler.queue().len() > 0 {
-            return Ok(());
-        }
-        
-        let sources_lock = ctx
-            .data
-            .read()
-            .await
-            .get::<SoundStore>()
-            .cloned()
-            .expect("Sound cache was installed at startup.");
-
-        let sources = sources_lock.lock().await;
-
-        let source: &CachedSound;
-        if let Some(src) = sources.get(&sound_name) {
-            source = src
-        } else {
-            check_msg(
-                msg.channel_id
-                    .say(
-                        &ctx.http,
-                        format!(
-                            "I don't know this sound: **{}**\nType `!list` to see a list of sounds",
-                            sound_name
-                        ),
-                    )
-                    .await,
-            );
-            return Ok(());
-        }
-
-        handler.enqueue_source(source.into());
-        // handler.play_source(source.into());
-    } else {
+    if file.is_none() {
         check_msg(
             msg.channel_id
-                .say(&ctx.http, "Not in a voice channel to play in")
+                .say(
+                    &ctx.http,
+                    format!(
+                        "I don't know this sound: **{}**\nType `!list` to see a list of sounds",
+                        sound_name
+                    ),
+                )
                 .await,
         );
+
+        return Ok(());
+    } else {
+        let src = input::ffmpeg(file.unwrap().file_path.clone()).await?;
+
+        join_channel(ctx, msg, &guild).await.unwrap();
+
+        let manager = songbird::get(ctx)
+            .await
+            .expect("Songbird Voice client placed in at initialisation.")
+            .clone();
+
+        if let Some(handler_lock) = manager.get(guild_id) {
+            let mut handler = handler_lock.lock().await;
+
+            // For now, we don't want to queue sounds, because that might get messy quickly.
+            if handler.queue().len() > 0 {
+                return Ok(());
+            }
+
+            handler.enqueue_source(src.into());
+        }
     }
 
     Ok(())

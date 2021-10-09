@@ -1,29 +1,23 @@
+use std::fs;
+
 use serenity::{
     client::Context,
-    framework::standard::{macros::command, Args, CommandResult},
+    framework::standard::{macros::command, CommandResult},
     model::channel::Message,
 };
 
-use crate::SoundStore;
+use crate::{utils::sound_files::get_sound_files, SoundStore};
 
 /// Lists all available sounds to play.
 /// Usage: `!list'
 #[command]
 #[only_in(guilds)]
 pub async fn list(ctx: &Context, msg: &Message) -> CommandResult {
-    let sound_files_lock = ctx
-        .data
-        .read()
-        .await
-        .get::<SoundStore>()
-        .cloned()
-        .expect("Sound cache was installed at startup.");
-
-    let sound_files = sound_files_lock.lock().await;
+    let files = get_sound_files().map_err(|err| format!("{}", err))?;
 
     let mut output = String::from("Type !play [sound name] to play a sound.\nAvailable sounds: \n");
 
-    for sound_name in sound_files.keys() {
+    for sound_name in files.keys() {
         output.push_str(&format!("\t- {}\n", sound_name));
     }
 
