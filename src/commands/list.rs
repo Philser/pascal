@@ -1,12 +1,10 @@
-use std::fs;
-
 use serenity::{
     client::Context,
     framework::standard::{macros::command, CommandResult},
     model::channel::Message,
 };
 
-use crate::{utils::sound_files::get_sound_files, SoundStore};
+use crate::utils::sound_files::get_sound_files;
 
 /// Lists all available sounds to play.
 /// Usage: `!list'

@@ -1,10 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryInto,
-    env,
-    error::Error,
-    sync::Arc,
-};
+use std::{collections::HashSet, env};
 
 use serenity::{
     async_trait,
@@ -14,15 +8,7 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
     prelude::*,
 };
-use songbird::{
-    input::{
-        self,
-        cached::{Compressed, Memory},
-        Input,
-    },
-    SerenityInit,
-};
-use std::fs;
+use songbird::SerenityInit;
 
 use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
@@ -54,30 +40,6 @@ impl EventHandler for Handler {
     // In this case, just print what the current user's username is.
     async fn ready(&self, _: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
-    }
-}
-
-struct SoundStore;
-
-impl TypeMapKey for SoundStore {
-    type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
-}
-
-enum CachedSound {
-    Compressed(Compressed),
-    Uncompressed(Memory),
-}
-
-impl From<&CachedSound> for Input {
-    fn from(obj: &CachedSound) -> Self {
-        use CachedSound::*;
-        match obj {
-            Compressed(c) => c.new_handle().into(),
-            Uncompressed(u) => u
-                .new_handle()
-                .try_into()
-                .expect("Failed to create decoder for Memory source."),
-        }
     }
 }
 

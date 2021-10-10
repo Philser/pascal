@@ -1,6 +1,5 @@
-FROM rust:alpine
+FROM rust:alpine as build
 
-# RUN apk update -y
 RUN apk add --no-cache opus-dev ffmpeg musl-dev
 
 WORKDIR /app
@@ -9,8 +8,10 @@ COPY . .
 
 RUN cargo build --release
 
-RUN cp ./target/release/pascal ./
+# our final base
+FROM rust:alpine
 
-RUN rm -rf ./target
+# copy the build artifact from the build stage
+COPY --from=build /app/target/release/pascal .
 
 CMD ["./pascal"]
