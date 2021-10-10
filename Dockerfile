@@ -1,7 +1,7 @@
-FROM rust:latest
+FROM rust:alpine
 
-RUN apt update -y
-RUN apt install -y libopus-dev ffmpeg
+# RUN apk update -y
+RUN apk add --no-cache opus-dev ffmpeg musl-dev
 
 WORKDIR /app
 
@@ -9,4 +9,8 @@ COPY . .
 
 RUN cargo build --release
 
-CMD ["./target/release/pascal"]
+RUN cp ./target/release/pascal ./
+
+RUN rm -rf ./target
+
+CMD ["./pascal"]
