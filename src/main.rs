@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
+    env,
     error::Error,
     sync::Arc,
 };
@@ -83,8 +84,7 @@ impl From<&CachedSound> for Input {
 #[tokio::main]
 async fn main() {
     // Configure the client with your Discord bot token in the environment.
-    dotenv::dotenv().expect("Missing .env file");
-    let token = dotenv::var("DISCORD_TOKEN").expect("Expected entry DISCORD_TOKEN in .env");
+    let token = env::var("DISCORD_TOKEN").expect("Expected env variable DISCORD_TOKEN to be set");
 
     let http = Http::new_with_token(&token);
 
