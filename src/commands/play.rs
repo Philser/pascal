@@ -54,7 +54,8 @@ async fn play_sound(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 
         return Ok(());
     } else {
-        let src = input::ffmpeg(file.unwrap().file_path.clone()).await?;
+        let sound_file = file.expect("Sound file not found");
+        let src = input::ffmpeg(sound_file.file_path.clone()).await?;
 
         join_channel(ctx, msg, &guild).await.unwrap();
 
@@ -63,17 +64,16 @@ async fn play_sound(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
             .expect("Songbird Voice client placed in at initialisation.")
             .clone();
 
-        if let Some(handler_lock) = manager.get(guild_id) {
-            let mut handler = handler_lock.lock().await;
+        let handler_lock = manager.get(guild_id).expect("Couldn't get handler lock");
+        let mut handler = handler_lock.lock().await;
 
-            // For now, we don't want to queue sounds, because that might get messy quickly.
-            // if handler.queue().len() > 0 {
-            //     return Ok(());
-            // }
+        // For now, we don't want to queue sounds, because that might get messy quickly.
+        // if handler.queue().len() > 0 {
+        //     return Ok(());
+        // }
 
-            // handler.enqueue_source(src.into());
-            handler.play_source(src.into());
-        }
+        // handler.enqueue_source(src.into());
+        handler.play_source(src.into());
     }
 
     Ok(())

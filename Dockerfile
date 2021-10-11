@@ -14,4 +14,6 @@ FROM rust:alpine
 # copy the build artifact from the build stage
 COPY --from=build /app/target/release/pascal .
 
+USER 1000
+
 CMD ["./pascal"]
