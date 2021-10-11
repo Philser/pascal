@@ -11,12 +11,15 @@ use crate::utils::sound_files::get_sound_files;
 #[only_in(guilds)]
 #[aliases(p)]
 pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    if let Some(channel) = msg.channel(&ctx.cache).await {
-        if let Some(guild_channel) = channel.guild() {
-            if guild_channel.name().eq("pascal-phone") {
-                return play_sound(ctx, msg, args).await;
-            }
-        }
+    let channel = msg
+        .channel(&ctx.cache)
+        .await
+        .expect("Missing channel in cache");
+
+    let guild_channel = channel.guild().expect("Channel not in guild");
+
+    if guild_channel.name().eq("pascal-phone") {
+        return play_sound(ctx, msg, args).await;
     }
 
     Ok(())
