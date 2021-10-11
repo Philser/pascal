@@ -55,6 +55,15 @@ async fn play_sound(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         return Ok(());
     } else {
         let sound_file = file.expect("Sound file not found");
+        println!(
+            "Accessing sound file {}",
+            sound_file
+                .file_path
+                .to_str()
+                .expect("No file path given")
+                .clone()
+        );
+
         let src = input::ffmpeg(sound_file.file_path.clone()).await?;
 
         join_channel(ctx, msg, &guild).await.unwrap();
