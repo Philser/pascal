@@ -8,6 +8,7 @@ pub struct SoundFile {
     pub file_path: PathBuf,
 }
 
+// TODO: Refactor
 /// Crawls the designated sound file directory for all allowed file extensions
 /// and returns a mapping of sound name (sound file minus extension) to sound file information
 pub fn get_sound_files() -> Result<HashMap<String, SoundFile>, Box<dyn Error>> {

@@ -10,6 +10,7 @@ use crate::utils::sound_files::get_sound_files;
 /// Usage: `!list'
 #[command]
 #[only_in(guilds)]
+#[aliases(l)]
 pub async fn list(ctx: &Context, msg: &Message) -> CommandResult {
     let files = get_sound_files().map_err(|err| format!("{}", err))?;
 

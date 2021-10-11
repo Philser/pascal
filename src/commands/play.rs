@@ -10,7 +10,19 @@ use crate::utils::sound_files::get_sound_files;
 #[command]
 #[only_in(guilds)]
 #[aliases(p)]
-pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    if let Some(channel) = msg.channel(&ctx.cache).await {
+        if let Some(guild_channel) = channel.guild() {
+            if guild_channel.name().eq("pascal-phone") {
+                return play_sound(ctx, msg, args).await;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn play_sound(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild_id = msg
         .guild_id
         .ok_or("Message not received via gateway, but is required to be")?;
