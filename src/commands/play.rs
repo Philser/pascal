@@ -67,11 +67,12 @@ async fn play_sound(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
             let mut handler = handler_lock.lock().await;
 
             // For now, we don't want to queue sounds, because that might get messy quickly.
-            if handler.queue().len() > 0 {
-                return Ok(());
-            }
+            // if handler.queue().len() > 0 {
+            //     return Ok(());
+            // }
 
-            handler.enqueue_source(src.into());
+            // handler.enqueue_source(src.into());
+            handler.play_source(src.into());
         }
     }
 
