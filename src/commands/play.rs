@@ -107,7 +107,7 @@ async fn join_channel(ctx: &Context, msg: &Message, guild: &Guild) -> CommandRes
 
     let manager = songbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Error fetching Songbird client")
         .clone();
 
     let join = manager.join(guild_id, connect_to).await;

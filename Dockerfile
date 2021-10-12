@@ -1,6 +1,6 @@
-FROM rust:alpine as build
+FROM rust:latest as build
 
-RUN apk add --no-cache opus-dev ffmpeg musl-dev
+RUN apt update && apt install -y libopus-dev ffmpeg
 
 WORKDIR /app
 
@@ -9,11 +9,11 @@ COPY . .
 RUN cargo build --release
 
 # our final base
-FROM rust:alpine
+FROM ubuntu:bionic
+
+RUN apt update && apt install -y libopus-dev ffmpeg
 
 # copy the build artifact from the build stage
-COPY --from=build /app/target/release/pascal .
-
-USER 1000
+COPY --from=build /app/target/release/pascal /pascal
 
 CMD ["./pascal"]
