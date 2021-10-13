@@ -9,9 +9,11 @@ COPY . .
 RUN cargo build --release
 
 # our final base
-FROM ubuntu:bionic
+FROM ubuntu:20.04
 
-RUN apt update && apt install -y libopus-dev ffmpeg youtube-dl
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && apt install -y libopus-dev ffmpeg pip && pip install --upgrade youtube-dl
 
 # copy the build artifact from the build stage
 COPY --from=build /app/target/release/pascal /pascal
