@@ -1,4 +1,5 @@
-use std::{collections::HashMap, error::Error, fs, path::PathBuf};
+use anyhow::{Context as AnyhowCtx, Result};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 const ALLOWED_TYPES: [&str; 3] = ["m4a", "wav", "mp3"];
 
@@ -11,12 +12,12 @@ pub struct SoundFile {
 // TODO: Refactor
 /// Crawls the designated sound file directory for all allowed file extensions
 /// and returns a mapping of sound name (sound file minus extension) to sound file information
-pub fn get_sound_files() -> Result<HashMap<String, SoundFile>, Box<dyn Error>> {
+pub fn get_sound_files() -> Result<HashMap<String, SoundFile>> {
     let mut sound_files: HashMap<String, SoundFile> = HashMap::new();
     if let Ok(files) = fs::read_dir("./audio") {
         for file in files {
             // filter for allowed extensions
-            let dir_entry = file.as_ref().unwrap();
+            let dir_entry = file.with_context(|| "Error reading directory")?;
             let path = dir_entry.path();
             if let Some(extension) = path.extension() {
                 if let Some(ext) = extension.to_str() {

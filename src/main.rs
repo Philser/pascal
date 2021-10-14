@@ -1,5 +1,7 @@
 use std::{collections::HashSet, env};
 
+use anyhow::Context as AnyhowCtx;
+use log::{error, info};
 use serenity::{
     async_trait,
     client::bridge::gateway::GatewayIntents,
@@ -10,8 +12,8 @@ use serenity::{
 };
 use songbird::SerenityInit;
 
-use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
+use crate::{commands::help::HELP, utils::error::handle_error};
 
 mod commands;
 mod utils;
@@ -45,8 +47,14 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
+    info!("Pascal starting...");
+
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected env variable DISCORD_TOKEN to be set");
+    let token = env::var("DISCORD_TOKEN")
+        .with_context(|| handle_error("Expected env variable DISCORD_TOKEN to be set".to_string()))
+        .unwrap();
 
     let http = Http::new_with_token(&token);
 
@@ -91,6 +99,6 @@ async fn main() {
         .expect("Err creating client");
 
     if let Err(err) = client.start().await {
-        println!("Client error: {:?}", err);
+        error!("Client error: {:?}", err);
     }
 }

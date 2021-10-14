@@ -20,8 +20,8 @@ pub async fn list(ctx: &Context, msg: &Message) -> CommandResult {
         output.push_str(&format!("\t- {}\n", sound_name));
     }
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, output).await {
-        println!("Error sending message: {:?}", why);
+    if let Err(err) = msg.channel_id.say(&ctx.http, output).await {
+        println!("Error sending message: {:?}", err);
     }
 
     Ok(())
