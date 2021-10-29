@@ -1,4 +1,7 @@
-use std::{collections::HashSet, env};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+};
 
 use anyhow::Context as AnyhowCtx;
 use log::{error, info};
@@ -21,10 +24,26 @@ async fn main() {
 
     info!("Pascal starting...");
 
-    // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN")
-        .with_context(|| handle_error("Expected env variable DISCORD_TOKEN to be set".to_string()))
-        .unwrap();
+    let mut conf = config::Config::default();
+
+    // If no custom conf file is specified, look for conf.yml
+    if let Ok(config_file) = env::var("CONFIG") {
+        if let Err(err) = conf.merge(config::File::with_name(&config_file)) {
+            error!("Unable to load config file: {}", err);
+            return;
+        }
+    } else if let Err(err) = conf.merge(config::File::with_name("config.yml")) {
+        error!("Unable to load config file: {}", err);
+        return;
+    }
+
+    let token = match conf.get_str("discord_token") {
+        Ok(token) => token,
+        Err(_) => {
+            error!("discord_token missing in config");
+            return;
+        }
+    };
 
     let http = Http::new_with_token(&token);
 
