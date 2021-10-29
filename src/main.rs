@@ -55,29 +55,27 @@ async fn main() {
     info!("Pascal starting...");
 
     let mut conf = config::Config::default();
-    if let Err(err) = conf.merge(config::Environment::with_prefix("")) {
-        error!("Unable to load ENV variables: {}", err);
-        return;
-    }
 
-    conf.get_str("config").unwrap();
     // If no custom conf file is specified, look for conf.yml
-    if let Ok(config_file) = conf.get_str("config") {
+    if let Ok(config_file) = env::var("CONFIG") {
         if let Err(err) = conf.merge(config::File::with_name(&config_file)) {
             error!("Unable to load config file: {}", err);
             return;
         }
-    } else if let Err(err) = conf.merge(config::File::with_name("conf.yml")) {
+    } else if let Err(err) = conf.merge(config::File::with_name("config.yml")) {
         error!("Unable to load config file: {}", err);
         return;
     }
 
-    // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN")
-        .with_context(|| handle_error("Expected env variable DISCORD_TOKEN to be set".to_string()))
-        .unwrap();
+    let token = match conf.get_str("discord_token") {
+        Ok(token) => token,
+        Err(_) => {
+            error!("discord_token missing in config");
+            return;
+        }
+    };
 
-    let http = Http::new_with_token(&conf.get_str("DISCORD_TOKEN").unwrap());
+    let http = Http::new_with_token(&token);
 
     // Fetch bot's owners and id
     let (owners, bot_id) = match http.get_current_application_info().await {
