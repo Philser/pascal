@@ -1,7 +1,6 @@
 use log::error;
 use serenity::client::Context;
 
-use anyhow::anyhow;
 use anyhow::Context as AnyhowCtx;
 use anyhow::Result;
 use serenity::framework::standard::{macros::command, Args, CommandResult};

@@ -1,22 +1,31 @@
-use std::{
-    collections::{HashMap, HashSet},
-    env,
-};
+use std::collections::HashMap;
+use std::fs;
+use std::sync::Arc;
+use std::{collections::HashSet, env};
 
-use anyhow::Context as AnyhowCtx;
+use anyhow::Result;
 use log::{error, info};
 use serenity::{
     client::bridge::gateway::GatewayIntents, framework::StandardFramework, http::Http, prelude::*,
 };
 use songbird::SerenityInit;
+use utils::config::IntroConfig;
 
+use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
 use crate::events::handler::Handler;
-use crate::{commands::help::HELP, utils::error::handle_error};
+use crate::utils::config::Config;
+use crate::utils::error::handle_error;
 
 mod commands;
 mod events;
 mod utils;
+
+struct IntroStore;
+
+impl TypeMapKey for IntroStore {
+    type Value = Arc<Mutex<IntroConfig>>;
+}
 
 #[tokio::main]
 async fn main() {
@@ -24,28 +33,15 @@ async fn main() {
 
     info!("Pascal starting...");
 
-    let mut conf = config::Config::default();
-
-    // If no custom conf file is specified, look for conf.yml
-    if let Ok(config_file) = env::var("CONFIG") {
-        if let Err(err) = conf.merge(config::File::with_name(&config_file)) {
+    let conf = match load_conf() {
+        Ok(conf) => conf,
+        Err(err) => {
             error!("Unable to load config file: {}", err);
-            return;
-        }
-    } else if let Err(err) = conf.merge(config::File::with_name("config.yml")) {
-        error!("Unable to load config file: {}", err);
-        return;
-    }
-
-    let token = match conf.get_str("discord_token") {
-        Ok(token) => token,
-        Err(_) => {
-            error!("discord_token missing in config");
             return;
         }
     };
 
-    let http = Http::new_with_token(&token);
+    let http = Http::new_with_token(&conf.discord_token);
 
     // Fetch bot's owners and id
     let (owners, bot_id) = match http.get_current_application_info().await {
@@ -75,7 +71,7 @@ async fn main() {
         .help(&HELP)
         .group(&GENERAL_GROUP);
 
-    let mut client = Client::builder(&token)
+    let mut client = Client::builder(&conf.discord_token)
         .framework(framework)
         .event_handler(Handler)
         .intents(
@@ -87,7 +83,26 @@ async fn main() {
         .await
         .expect("Err creating client");
 
+    {
+        let mut data = client.data.write().await;
+
+        data.insert::<IntroStore>(Arc::new(Mutex::new(conf.intros)));
+    }
+
     if let Err(err) = client.start().await {
         error!("Client error: {:?}", err);
     }
+}
+
+fn load_conf() -> Result<Config> {
+    let mut conf_file: String = "config.yml".to_owned();
+
+    // If no custom conf file is specified, look for conf.yml
+    if let Ok(alt_conf_file) = env::var("CONFIG") {
+        conf_file = alt_conf_file;
+    }
+
+    let conf: Config = serde_yaml::from_reader(fs::File::open(conf_file)?)?;
+
+    Ok(conf)
 }
