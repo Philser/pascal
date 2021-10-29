@@ -6,9 +6,12 @@ use anyhow::Result;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::channel::Message;
 use serenity::model::guild::Guild;
+use serenity::model::id::ChannelId;
+use serenity::model::id::GuildId;
 use serenity::Result as SerenityResult;
 use songbird::input;
 
+use crate::utils::discord::{join_channel, play_sound};
 use crate::utils::error::handle_error;
 use crate::utils::sound_files::get_sound_files;
 
@@ -35,21 +38,68 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
     let arg = parse_argument(ctx, msg, &mut args).await?;
 
+    let channel_id_opt = guild
+        .voice_states
+        .get(&msg.author.id)
+        .and_then(|voice_state| voice_state.channel_id);
+
+    let channel_id = match channel_id_opt {
+        Some(channel) => channel,
+        None => {
+            check_msg(msg.reply(ctx, "Not in a voice channel").await);
+
+            return Ok(());
+        }
+    };
+
     if arg.starts_with("https://") {
-        play_youtube(ctx, msg, &guild, &arg).await?;
+        play_youtube(ctx, msg, &guild, channel_id, &arg).await?;
     } else {
-        play_sound(ctx, msg, &guild, &arg).await?;
+        play_from_file(ctx, msg, guild, &arg).await?;
     }
 
     Ok(())
 }
 
-async fn play_youtube(ctx: &Context, msg: &Message, guild: &Guild, url: &str) -> Result<()> {
+async fn play_from_file(ctx: &Context, msg: &Message, guild: Guild, file_name: &str) -> Result<()> {
+    let sound_files = get_sound_files()?;
+
+    match sound_files.get(file_name) {
+        Some(file) => {
+            crate::utils::discord::play_sound(ctx, guild.id, file).await?;
+        }
+        None => {
+            // TODO: Refactor into error methods or smth
+            check_msg(
+                msg.channel_id
+                    .say(
+                        &ctx.http,
+                        format!(
+                            "I don't know this sound: **{}**\nType `!list` to see a list of sounds",
+                            file_name
+                        ),
+                    )
+                    .await,
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// TODO: Refactor like play_sound, i.e. more specialized and modular
+async fn play_youtube(
+    ctx: &Context,
+    msg: &Message,
+    guild: &Guild,
+    channel_id: ChannelId,
+    url: &str,
+) -> Result<()> {
     let manager = songbird::get(ctx)
         .await
         .ok_or_else(|| handle_error("Songbird client not initialized".to_string()))?;
 
-    join_channel(ctx, msg, &guild)
+    join_channel(ctx, guild.id, channel_id)
         .await
         .with_context(|| handle_error("Failed to join channel".to_string()))?;
 
@@ -68,76 +118,6 @@ async fn play_youtube(ctx: &Context, msg: &Message, guild: &Guild, url: &str) ->
             return Err(handle_error(err_message));
         }
     };
-
-    Ok(())
-}
-
-async fn play_sound(ctx: &Context, msg: &Message, guild: &Guild, sound_name: &str) -> Result<()> {
-    let sound_files = get_sound_files()?;
-
-    let file = sound_files.get(sound_name);
-
-    if let Some(sound_file) = file {
-        let src = input::ffmpeg(sound_file.file_path.clone())
-            .await
-            .with_context(|| handle_error("Error reading ffmpeg source".to_string()))?;
-
-        let manager = songbird::get(ctx)
-            .await
-            .ok_or_else(|| handle_error("Songbird Voice client not initialized".to_string()))?
-            .clone();
-
-        join_channel(ctx, msg, &guild).await?;
-
-        let handler_lock = manager
-            .get(guild.id)
-            .ok_or_else(|| handle_error("Couldn't get handler lock".to_string()))?;
-
-        let mut handler = handler_lock.lock().await;
-        handler.play_source(src.into());
-    } else {
-        // TODO: Refactor into error methods or smth
-        check_msg(
-            msg.channel_id
-                .say(
-                    &ctx.http,
-                    format!(
-                        "I don't know this sound: **{}**\nType `!list` to see a list of sounds",
-                        sound_name
-                    ),
-                )
-                .await,
-        );
-    }
-
-    Ok(())
-}
-
-async fn join_channel(ctx: &Context, msg: &Message, guild: &Guild) -> Result<()> {
-    let guild_id = guild.id;
-
-    let channel_id = guild
-        .voice_states
-        .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id);
-
-    let connect_to = match channel_id {
-        Some(channel) => channel,
-        None => {
-            check_msg(msg.reply(ctx, "Not in a voice channel").await);
-
-            return Ok(());
-        }
-    };
-
-    let manager = songbird::get(ctx)
-        .await
-        .ok_or_else(|| handle_error("Error fetching Songbird client".to_string()))?
-        .clone();
-
-    let join = manager.join(guild_id, connect_to).await;
-
-    join.1.unwrap();
 
     Ok(())
 }

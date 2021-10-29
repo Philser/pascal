@@ -1,6 +1,4 @@
-use std::ops::RangeBounds;
-
-use log::{error, info};
+use log::{debug, error};
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -11,6 +9,10 @@ use serenity::{
     },
 };
 
+use crate::utils::{
+    discord::{join_channel, play_sound},
+    sound_files::get_sound_files,
+};
 use crate::{utils::config::UserIntro, IntroStore};
 
 pub(crate) struct Handler;
@@ -36,21 +38,33 @@ impl EventHandler for Handler {
         old_state: Option<VoiceState>,
         new_state: VoiceState,
     ) {
-        info!("Event received");
+        debug!("Voice Update received");
+
+        if guild_id.is_none() {
+            debug!("No guild ID present, cannot play intro song");
+            return;
+        }
+        let guild_id = guild_id.unwrap();
+
         // Only play intros for users that weren't on the server before (i.e. in another channel)
         if old_state.is_some() {
             return;
         }
 
-        let intros_lock = ctx
+        let intros_lock = match ctx
             .data
             .read()
             .await
             .get::<IntroStore>()
             .cloned()
             .ok_or("[Voice State Update] Unable to get intro store")
-            .map_err(|err| error!("{}", err))
-            .unwrap();
+        {
+            Ok(lock) => lock,
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        };
 
         let intros = intros_lock.lock().await;
 
@@ -81,7 +95,36 @@ impl EventHandler for Handler {
             .sound_file
             .as_ref();
 
-        info!("I got so faaaar");
+        let channel_id = &new_state.channel_id.unwrap();
+
+        if let Err(err) = join_channel(&ctx, guild_id, *channel_id).await {
+            error!("Error joining voice channel: {}", err);
+            return;
+        }
+
+        let sound_files = match get_sound_files() {
+            Ok(files) => files,
+            Err(err) => {
+                error!("Error getting files: {}", err);
+                return;
+            }
+        };
+
+        match sound_files.get(intro_file).ok_or(format!(
+            "Could not play intro file: Missing file {}",
+            intro_file
+        )) {
+            Ok(file) => {
+                if let Err(err) = play_sound(&ctx, guild_id, file).await {
+                    error!("Error playing sound: {}", err);
+                    return;
+                }
+            }
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
     }
 
     // Set a handler to be called on the `ready` event. This is called when a
