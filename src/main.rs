@@ -1,51 +1,30 @@
-use std::{
-    collections::{HashMap, HashSet},
-    env,
-};
+use std::collections::HashMap;
+use std::fs;
+use std::sync::Arc;
+use std::{collections::HashSet, env};
 
-use anyhow::Context as AnyhowCtx;
+use anyhow::Result;
 use log::{error, info};
 use serenity::{
-    async_trait,
-    client::bridge::gateway::GatewayIntents,
-    framework::StandardFramework,
-    http::Http,
-    model::{channel::Message, gateway::Ready},
-    prelude::*,
+    client::bridge::gateway::GatewayIntents, framework::StandardFramework, http::Http, prelude::*,
 };
 use songbird::SerenityInit;
+use utils::config::IntroConfig;
 
+use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
-use crate::{commands::help::HELP, utils::error::handle_error};
+use crate::events::handler::Handler;
+use crate::utils::config::Config;
+use crate::utils::error::handle_error;
 
 mod commands;
+mod events;
 mod utils;
 
-struct Handler;
+struct IntroStore;
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!ping" {
-            // Sending a message can fail, due to a network error, an
-            // authentication error, or lack of permissions to post in the
-            // channel, so log to stdout when some error happens, with a
-            // description of it.
-            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-                println!("Error sending message: {:?}", why);
-            }
-        }
-    }
-
-    // Set a handler to be called on the `ready` event. This is called when a
-    // shard is booted, and a READY payload is sent by Discord. This payload
-    // contains data like the current user's guild Ids, current user data,
-    // private channels, and more.
-    //
-    // In this case, just print what the current user's username is.
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-    }
+impl TypeMapKey for IntroStore {
+    type Value = Arc<Mutex<IntroConfig>>;
 }
 
 #[tokio::main]
@@ -54,28 +33,15 @@ async fn main() {
 
     info!("Pascal starting...");
 
-    let mut conf = config::Config::default();
-
-    // If no custom conf file is specified, look for conf.yml
-    if let Ok(config_file) = env::var("CONFIG") {
-        if let Err(err) = conf.merge(config::File::with_name(&config_file)) {
+    let conf = match load_conf() {
+        Ok(conf) => conf,
+        Err(err) => {
             error!("Unable to load config file: {}", err);
-            return;
-        }
-    } else if let Err(err) = conf.merge(config::File::with_name("config.yml")) {
-        error!("Unable to load config file: {}", err);
-        return;
-    }
-
-    let token = match conf.get_str("discord_token") {
-        Ok(token) => token,
-        Err(_) => {
-            error!("discord_token missing in config");
             return;
         }
     };
 
-    let http = Http::new_with_token(&token);
+    let http = Http::new_with_token(&conf.discord_token);
 
     // Fetch bot's owners and id
     let (owners, bot_id) = match http.get_current_application_info().await {
@@ -105,7 +71,7 @@ async fn main() {
         .help(&HELP)
         .group(&GENERAL_GROUP);
 
-    let mut client = Client::builder(&token)
+    let mut client = Client::builder(&conf.discord_token)
         .framework(framework)
         .event_handler(Handler)
         .intents(
@@ -117,7 +83,26 @@ async fn main() {
         .await
         .expect("Err creating client");
 
+    {
+        let mut data = client.data.write().await;
+
+        data.insert::<IntroStore>(Arc::new(Mutex::new(conf.intros)));
+    }
+
     if let Err(err) = client.start().await {
         error!("Client error: {:?}", err);
     }
+}
+
+fn load_conf() -> Result<Config> {
+    let mut conf_file: String = "config.yml".to_owned();
+
+    // If no custom conf file is specified, look for conf.yml
+    if let Ok(alt_conf_file) = env::var("CONFIG") {
+        conf_file = alt_conf_file;
+    }
+
+    let conf: Config = serde_yaml::from_reader(fs::File::open(conf_file)?)?;
+
+    Ok(conf)
 }
