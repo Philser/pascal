@@ -55,17 +55,26 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     if arg.starts_with("https://") {
         play_youtube(ctx, msg, &guild, channel_id, &arg).await?;
     } else {
-        play_from_file(ctx, msg, guild, &arg).await?;
+        play_from_file(ctx, msg, guild, channel_id, &arg).await?;
     }
 
     Ok(())
 }
 
-async fn play_from_file(ctx: &Context, msg: &Message, guild: Guild, file_name: &str) -> Result<()> {
+async fn play_from_file(
+    ctx: &Context,
+    msg: &Message,
+    guild: Guild,
+    channel_id: ChannelId,
+    file_name: &str,
+) -> Result<()> {
     let sound_files = get_sound_files()?;
 
     match sound_files.get(file_name) {
         Some(file) => {
+            join_channel(ctx, guild.id, channel_id)
+                .await
+                .with_context(|| handle_error("Failed to join channel".to_string()))?;
             crate::utils::discord::play_sound(ctx, guild.id, file).await?;
         }
         None => {
