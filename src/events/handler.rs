@@ -1,3 +1,4 @@
+use anyhow::Context as AnyhowCtx;
 use log::{debug, error};
 use serenity::{
     async_trait,
@@ -5,12 +6,20 @@ use serenity::{
     model::{
         channel::Message,
         id::GuildId,
-        prelude::{Ready, VoiceState},
+        interactions::{
+            application_command::{
+                ApplicationCommand, ApplicationCommandInteractionDataOptionValue,
+                ApplicationCommandOptionType,
+            },
+            Interaction,
+        },
+        prelude::*,
     },
 };
 
 use crate::utils::{
-    discord::{join_channel, play_sound},
+    discord::{join_channel, play_from_file, play_sound, play_youtube},
+    error::{check_msg, handle_error},
     sound_files::get_sound_files,
 };
 use crate::{utils::config::UserIntro, IntroStore};
@@ -31,6 +40,62 @@ impl EventHandler for Handler {
         }
     }
 
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            if command.guild_id.is_none() {
+                debug!(
+                    "Guild ID not found for slash command {} and caller {}",
+                    command.data.name, command.user.name
+                );
+                return;
+            }
+
+            if command.data.name.as_str() == "play" {
+                let guild_id = command.guild_id.unwrap();
+
+                join_channel(&ctx, guild_id, command.channel_id)
+                    .await
+                    .with_context(|| handle_error("Failed to join channel".to_string()))
+                    .unwrap();
+
+                // Only use the first provided argument
+                let option = command
+                    .data
+                    .options
+                    .get(0)
+                    .expect("Expected name of sound to play")
+                    .resolved
+                    .as_ref()
+                    .expect("Expected resolved command option");
+
+                if let ApplicationCommandInteractionDataOptionValue::String(sound_name) = option {
+                    if sound_name.starts_with("https://") {
+                        play_youtube(&ctx, command.channel_id, guild_id, sound_name)
+                            .await
+                            .with_context(|| handle_error("Failed to join channel".to_string()))
+                            .unwrap();
+                    } else {
+                        play_from_file(&ctx, command.channel_id, guild_id, sound_name)
+                            .await
+                            .with_context(|| handle_error("Failed to join channel".to_string()))
+                            .unwrap();
+                    }
+                } else {
+                    check_msg(
+                        command
+                            .channel_id
+                            .say(&ctx.http, "Invalid sound name input")
+                            .await,
+                    );
+                }
+            };
+            // It's desired behaviour to have the bot play the sound in the current channel
+            // if the caller is not in a channel themself
+        }
+    }
+
+    // Detects when a known user joins an allowed channel and plays a registered intro song
+    // TODO: Refactor into own method
     async fn voice_state_update(
         &self,
         ctx: Context,
@@ -97,9 +162,9 @@ impl EventHandler for Handler {
 
         let channel_id = &new_state.channel_id.unwrap();
 
+        // Just play the sound in the current channel
         if let Err(err) = join_channel(&ctx, guild_id, *channel_id).await {
-            error!("Error joining voice channel: {}", err);
-            return;
+            debug!("Error joining voice channel: {}", err);
         }
 
         let sound_files = match get_sound_files() {
@@ -127,13 +192,27 @@ impl EventHandler for Handler {
         }
     }
 
-    // Set a handler to be called on the `ready` event. This is called when a
-    // shard is booted, and a READY payload is sent by Discord. This payload
-    // contains data like the current user's guild Ids, current user data,
-    // private channels, and more.
-    //
-    // In this case, just print what the current user's username is.
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        match ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
+            commands.create_application_command(|command| {
+                command
+                    .name("play")
+                    .description("Command Pascal to play a sound")
+                    .create_option(|option| {
+                        option
+                            .name("sound")
+                            .description("Name of the sound to play. Use the list command to see all possible values")
+                            .kind(ApplicationCommandOptionType::String)
+                            .required(true)
+                    })
+            })
+        })
+        .await
+        {
+            Ok(_) => (),
+            Err(e) => error!("Error registering slash commands: {}", e),
+        }
+
         println!("{} is connected!", ready.user.name);
     }
 }

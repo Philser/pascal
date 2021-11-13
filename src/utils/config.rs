@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) struct Config {
     pub discord_token: String,
     pub intros: IntroConfig,
+    pub application_id: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
