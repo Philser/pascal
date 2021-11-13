@@ -7,11 +7,9 @@ use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::channel::Message;
 use serenity::model::guild::Guild;
 use serenity::model::id::ChannelId;
-use serenity::model::id::GuildId;
 use serenity::Result as SerenityResult;
-use songbird::input;
 
-use crate::utils::discord::{join_channel, play_sound};
+use crate::utils::discord::join_channel;
 use crate::utils::error::handle_error;
 use crate::utils::sound_files::get_sound_files;
 
@@ -43,38 +41,29 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         .get(&msg.author.id)
         .and_then(|voice_state| voice_state.channel_id);
 
-    let channel_id = match channel_id_opt {
-        Some(channel) => channel,
-        None => {
-            check_msg(msg.reply(ctx, "Not in a voice channel").await);
-
-            return Ok(());
-        }
+    // It's desired behaviour to have the bot play the sound in the current channel
+    // if the caller is not in a channel themself
+    match channel_id_opt {
+        Some(channel) => join_channel(ctx, guild.id, channel)
+            .await
+            .with_context(|| handle_error("Failed to join channel".to_string()))?,
+        None => check_msg(msg.reply(ctx, "Not in a voice channel").await),
     };
 
     if arg.starts_with("https://") {
-        play_youtube(ctx, msg, &guild, channel_id, &arg).await?;
+        play_youtube(ctx, msg, &guild, &arg).await?;
     } else {
-        play_from_file(ctx, msg, guild, channel_id, &arg).await?;
+        play_from_file(ctx, msg, guild, &arg).await?;
     }
 
     Ok(())
 }
 
-async fn play_from_file(
-    ctx: &Context,
-    msg: &Message,
-    guild: Guild,
-    channel_id: ChannelId,
-    file_name: &str,
-) -> Result<()> {
+async fn play_from_file(ctx: &Context, msg: &Message, guild: Guild, file_name: &str) -> Result<()> {
     let sound_files = get_sound_files()?;
 
     match sound_files.get(file_name) {
         Some(file) => {
-            join_channel(ctx, guild.id, channel_id)
-                .await
-                .with_context(|| handle_error("Failed to join channel".to_string()))?;
             crate::utils::discord::play_sound(ctx, guild.id, file).await?;
         }
         None => {
@@ -97,20 +86,10 @@ async fn play_from_file(
 }
 
 // TODO: Refactor like play_sound, i.e. more specialized and modular
-async fn play_youtube(
-    ctx: &Context,
-    msg: &Message,
-    guild: &Guild,
-    channel_id: ChannelId,
-    url: &str,
-) -> Result<()> {
+async fn play_youtube(ctx: &Context, msg: &Message, guild: &Guild, url: &str) -> Result<()> {
     let manager = songbird::get(ctx)
         .await
         .ok_or_else(|| handle_error("Songbird client not initialized".to_string()))?;
-
-    join_channel(ctx, guild.id, channel_id)
-        .await
-        .with_context(|| handle_error("Failed to join channel".to_string()))?;
 
     let handler_lock = manager
         .get(guild.id)
