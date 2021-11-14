@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use std::{collections::HashSet, env};
@@ -15,7 +14,6 @@ use crate::commands::help::HELP;
 use crate::commands::GENERAL_GROUP;
 use crate::events::handler::Handler;
 use crate::utils::config::Config;
-use crate::utils::error::handle_error;
 
 mod commands;
 mod events;
@@ -74,6 +72,7 @@ async fn main() {
     let mut client = Client::builder(&conf.discord_token)
         .framework(framework)
         .event_handler(Handler)
+        .application_id(conf.application_id)
         .intents(
             GatewayIntents::GUILD_VOICE_STATES
                 | GatewayIntents::GUILDS

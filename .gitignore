@@ -19,4 +19,5 @@ Cargo.lock
 /audio/*.m4a
 /audio/*.wav
 
+config/
 config.yml
