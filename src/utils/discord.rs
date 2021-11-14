@@ -1,9 +1,11 @@
+use log::error;
 use serenity::client::Context;
 
 use anyhow::Context as AnyhowCtx;
 use anyhow::Result;
 use serenity::model::id::ChannelId;
 use serenity::model::id::GuildId;
+use serenity::model::id::UserId;
 use songbird::input;
 
 use crate::utils::error::check_msg;
@@ -104,4 +106,24 @@ pub async fn join_channel(ctx: &Context, guild_id: GuildId, channel_id: ChannelI
     join.1?;
 
     Ok(())
+}
+
+// Attempts to get the ID of the channel the given user is currently active in.
+// If user is not in any voice channel in a known (cached) guild, it returns None.
+pub async fn get_channel_of_member(
+    ctx: Context,
+    guild_id: GuildId,
+    user_id: UserId,
+) -> Option<ChannelId> {
+    let guild = if let Some(guild) = guild_id.to_guild_cached(ctx.cache).await {
+        guild
+    } else {
+        error!("Could not find guild in cache for guild ID: {}", guild_id);
+        return None;
+    };
+
+    guild
+        .voice_states
+        .get(&user_id)
+        .and_then(|voice_state| voice_state.channel_id)
 }

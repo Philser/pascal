@@ -18,7 +18,7 @@ use serenity::{
 };
 
 use crate::utils::{
-    discord::{join_channel, play_from_file, play_sound, play_youtube},
+    discord::{get_channel_of_member, join_channel, play_from_file, play_sound, play_youtube},
     error::{check_msg, handle_error},
     sound_files::get_sound_files,
 };
@@ -42,21 +42,25 @@ impl EventHandler for Handler {
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
-            if command.guild_id.is_none() {
-                debug!(
-                    "Guild ID not found for slash command {} and caller {}",
-                    command.data.name, command.user.name
-                );
-                return;
-            }
+            let guild_id = match command.guild_id {
+                Some(gid) => gid,
+                None => {
+                    debug!(
+                        "Guild ID not found for slash command {} and caller {}",
+                        command.data.name, command.user.name
+                    );
+                    return;
+                }
+            };
 
             if command.data.name.as_str() == "play" {
-                let guild_id = command.guild_id.unwrap();
-
-                join_channel(&ctx, guild_id, command.channel_id)
-                    .await
-                    .with_context(|| handle_error("Failed to join channel".to_string()))
-                    .unwrap();
+                if let Some(channel_id) =
+                    get_channel_of_member(ctx.clone(), guild_id, command.user.id).await
+                {
+                    if let Err(e) = join_channel(&ctx, guild_id, channel_id).await {
+                        error!("Failed to join channel: {}", e);
+                    }
+                }
 
                 // Only use the first provided argument
                 let option = command
@@ -72,12 +76,14 @@ impl EventHandler for Handler {
                     if sound_name.starts_with("https://") {
                         play_youtube(&ctx, command.channel_id, guild_id, sound_name)
                             .await
-                            .with_context(|| handle_error("Failed to join channel".to_string()))
+                            .with_context(|| {
+                                handle_error("Failed to play from youtube".to_string())
+                            })
                             .unwrap();
                     } else {
                         play_from_file(&ctx, command.channel_id, guild_id, sound_name)
                             .await
-                            .with_context(|| handle_error("Failed to join channel".to_string()))
+                            .with_context(|| handle_error("Failed to play sound".to_string()))
                             .unwrap();
                     }
                 } else {
@@ -88,9 +94,21 @@ impl EventHandler for Handler {
                             .await,
                     );
                 }
+
+                let flags = InteractionApplicationCommandCallbackDataFlags::EPHEMERAL;
+                if let Err(e) = command
+                    .create_interaction_response(&ctx.http, |response| {
+                        response
+                            .kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|message| {
+                                message.content("Tight.").flags(flags)
+                            })
+                    })
+                    .await
+                {
+                    error!("Error responding to slash command: {}", e);
+                }
             };
-            // It's desired behaviour to have the bot play the sound in the current channel
-            // if the caller is not in a channel themself
         }
     }
 
