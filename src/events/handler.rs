@@ -121,19 +121,6 @@ impl EventHandler for Handler {
         old_state: Option<VoiceState>,
         new_state: VoiceState,
     ) {
-        debug!("Voice Update received");
-
-        if guild_id.is_none() {
-            debug!("No guild ID present, cannot play intro song");
-            return;
-        }
-        let guild_id = guild_id.unwrap();
-
-        // Only play intros for users that weren't on the server before (i.e. in another channel)
-        if old_state.is_some() {
-            return;
-        }
-
         let intros_lock = match ctx
             .data
             .read()
@@ -148,15 +135,10 @@ impl EventHandler for Handler {
                 return;
             }
         };
-
         let intros = intros_lock.lock().await;
 
-        // Only allowed channels
-        if new_state.channel_id.is_none()
-            || !intros
-                .channels
-                .contains(&new_state.channel_id.unwrap().as_u64())
-        {
+        // Only play intros for users that weren't on the server before (i.e. in another channel)
+        if old_state.is_some() {
             return;
         }
 
@@ -170,6 +152,21 @@ impl EventHandler for Handler {
             return;
         }
 
+        // Only care for updates in allowed channels
+        if new_state.channel_id.is_none()
+            || !intros
+                .channels
+                .contains(&new_state.channel_id.unwrap().as_u64())
+        {
+            return;
+        }
+
+        if guild_id.is_none() {
+            debug!("No guild ID present, cannot play intro song");
+            return;
+        }
+        let guild_id = guild_id.unwrap();
+
         let intro_file: &str = intros
             .user_intros
             .iter()
@@ -178,9 +175,14 @@ impl EventHandler for Handler {
             .sound_file
             .as_ref();
 
-        let channel_id = &new_state.channel_id.unwrap();
+        let channel_id = match &new_state.channel_id {
+            Some(cid) => cid,
+            None => {
+                error!("ChannelId was not present, cannot play intro song");
+                return;
+            }
+        };
 
-        // Just play the sound in the current channel
         if let Err(err) = join_channel(&ctx, guild_id, *channel_id).await {
             debug!("Error joining voice channel: {}", err);
         }
