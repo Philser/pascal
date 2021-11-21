@@ -1,5 +1,5 @@
 use anyhow::Context as AnyhowCtx;
-use log::{debug, error};
+use log::{debug, error, info};
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -109,6 +109,17 @@ impl EventHandler for Handler {
                     error!("Error responding to slash command: {}", e);
                 }
             };
+        } else if let Interaction::Autocomplete(autocomplete) = interaction {
+            if let Err(e) = autocomplete
+                .create_autocomplete_response(&ctx.http, |response| {
+                    response
+                        .add_string_choice("test", "test")
+                        .add_string_choice("test2", "test2")
+                })
+                .await
+            {
+                error!("Error sending auto complete suggestions: {}", e);
+            }
         }
     }
 
@@ -224,6 +235,7 @@ impl EventHandler for Handler {
                             .description("Name of the sound to play. Use the list command to see all possible values")
                             .kind(ApplicationCommandOptionType::String)
                             .required(true)
+                            .set_autocomplete(true)
                     })
             })
         })

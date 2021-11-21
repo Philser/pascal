@@ -5,8 +5,12 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[patch.crates-io]
+serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current" }
+
 [dependencies]
-serenity = { version= "0.10.8",  default-features = false, features = ["client", "gateway", "rustls_backend", "model", "framework", "standard_framework", "voice", "cache", "unstable_discord_api"]}
+# serenity = { version= "0.10.8",  default-features = false, features = ["client", "gateway", "rustls_backend", "model", "framework", "standard_framework", "voice", "cache", "unstable_discord_api"]}
+serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "framework", "standard_framework", "voice", "cache", "unstable_discord_api"]}
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 dotenv = "0.15"
 songbird = { version = "0.2.0", features = ["builtin-queue"] }
