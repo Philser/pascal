@@ -1,5 +1,7 @@
 use anyhow::Context as AnyhowCtx;
-use log::{debug, error, info};
+use log::{debug, error};
+use serde_json::json;
+use serde_json::Value;
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -18,6 +20,7 @@ use serenity::{
 };
 
 use crate::utils::{
+    autocomplete,
     discord::{get_channel_of_member, join_channel, play_from_file, play_sound, play_youtube},
     error::{check_msg, handle_error},
     sound_files::get_sound_files,
@@ -45,7 +48,7 @@ impl EventHandler for Handler {
             let guild_id = match command.guild_id {
                 Some(gid) => gid,
                 None => {
-                    debug!(
+                    error!(
                         "Guild ID not found for slash command {} and caller {}",
                         command.data.name, command.user.name
                     );
@@ -110,15 +113,59 @@ impl EventHandler for Handler {
                 }
             };
         } else if let Interaction::Autocomplete(autocomplete) = interaction {
-            if let Err(e) = autocomplete
-                .create_autocomplete_response(&ctx.http, |response| {
-                    response
-                        .add_string_choice("test", "test")
-                        .add_string_choice("test2", "test2")
-                })
-                .await
-            {
-                error!("Error sending auto complete suggestions: {}", e);
+            error!("Received autocompletion: {:?}", autocomplete);
+            if autocomplete.data.name == "play" {
+                error!("Received play autocompletion");
+                let searched_sound_opt = match autocomplete
+                    .data
+                    .options
+                    .iter()
+                    .filter(|option| option.name == "sound")
+                    .last()
+                {
+                    Some(s) => s.value.clone(),
+                    None => return, // Ignore unknown command names
+                };
+
+                let searched_sound_value = match searched_sound_opt {
+                    Some(s) => s,
+                    None => Value::String("".to_string()),
+                };
+
+                error!("Searched_sound_value: {:?}", searched_sound_value);
+
+                let searched_sound = match searched_sound_value.as_str() {
+                    Some(s) => s,
+                    None => return, // Whatever the hell arrives here, we don't want anything to do with it
+                };
+
+                let sound_files: Vec<String> = match crate::utils::sound_files::get_sound_files() {
+                    Ok(map) => map.keys().map(|key| key.to_owned()).collect(),
+                    Err(e) => {
+                        error!(
+                            "[Autocomplete Interaction] Error fetching sound files: {}",
+                            e
+                        );
+                        return;
+                    }
+                };
+                error!("List of sounds: {:?}", sound_files);
+
+                let suggestions = autocomplete::get_lookup_results(searched_sound, sound_files);
+                error!("Suggestions: {:?}", suggestions);
+
+                if let Err(e) = autocomplete
+                    .create_autocomplete_response(&ctx.http, |response| {
+                        for suggestion in suggestions {
+                            response.add_string_choice(suggestion.clone(), suggestion);
+                        }
+
+                        response
+                    })
+                    .await
+                {
+                    error!("Error sending auto complete suggestions: {}", e);
+                }
             }
         }
     }
@@ -173,7 +220,7 @@ impl EventHandler for Handler {
         }
 
         if guild_id.is_none() {
-            debug!("No guild ID present, cannot play intro song");
+            error!("No guild ID present, cannot play intro song");
             return;
         }
         let guild_id = guild_id.unwrap();
@@ -195,7 +242,7 @@ impl EventHandler for Handler {
         };
 
         if let Err(err) = join_channel(&ctx, guild_id, *channel_id).await {
-            debug!("Error joining voice channel: {}", err);
+            error!("Error joining voice channel: {}", err);
         }
 
         let sound_files = match get_sound_files() {
