@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::Context as AnyhowCtx;
 use log::error;
 use serenity::{
@@ -18,6 +20,8 @@ use crate::utils::{
     error::{check_msg, handle_error},
 };
 
+pub const PLAY_COMMAND: &str = "play";
+
 pub async fn handle_slash_commands(ctx: Context, command: ApplicationCommandInteraction) {
     let guild_id = match command.guild_id {
         Some(gid) => gid,
@@ -30,7 +34,7 @@ pub async fn handle_slash_commands(ctx: Context, command: ApplicationCommandInte
         }
     };
 
-    if let "play" = command.data.name.as_str() {
+    if command.data.name.as_str() == PLAY_COMMAND {
         handle_play_command(ctx, command, guild_id).await
     };
 }

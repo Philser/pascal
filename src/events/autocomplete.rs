@@ -4,8 +4,10 @@ use serenity::{client::Context, model::interactions::autocomplete::AutocompleteI
 
 use crate::utils::fuzzy_lookup;
 
+use super::slash_commands::PLAY_COMMAND;
+
 pub async fn handle_autocomplete_interaction(ctx: Context, autocomplete: AutocompleteInteraction) {
-    if autocomplete.data.name == "play" {
+    if autocomplete.data.name == PLAY_COMMAND {
         let searched_sound_opt = match autocomplete
             .data
             .options
