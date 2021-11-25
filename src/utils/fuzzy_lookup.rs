@@ -32,7 +32,13 @@ pub fn get_lookup_results(search_key: &str, elements: Vec<String>) -> Vec<String
         }
 
         if let Some(hit_vec) = hits.get(&score) {
-            results.extend(hit_vec.clone());
+            if results.len() + hit_vec.len() > MAX_AUTOCOMPLETE_RESULTS {
+                let mut clone = hit_vec.clone();
+                clone.truncate(MAX_AUTOCOMPLETE_RESULTS - results.len());
+                results.extend(clone);
+            } else {
+                results.extend(hit_vec.clone());
+            }
         }
     }
 
